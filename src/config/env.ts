@@ -16,11 +16,3 @@ export const config = {
   apiPrefix: raw.API_PREFIX,
   corsOrigin: raw.CORS_ORIGIN,
 };
-
-// patch: 2026-05-31T06:00:00
-
-// patch: 2026-05-31T21:00:00
-
-// patch: 2026-06-04T15:00:00
-
-// patch: 2026-07-05T21:00:00

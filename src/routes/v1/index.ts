@@ -9,29 +9,3 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
 
   // TODO: routes for contract invocation prep, webhook ingestion, admin ops
 };
-
-// patch: 2026-06-02T18:00:00
-
-// patch: 2026-06-03T09:00:00
-
-// patch: 2026-06-04T00:00:00
-
-// patch: 2026-06-05T06:00:00
-
-// patch: 2026-06-05T21:00:00
-
-// patch: 2026-06-12T03:00:00
-
-// patch: 2026-06-20T06:00:00
-
-// patch: 2026-06-20T21:00:00
-
-// patch: 2026-06-21T12:00:00
-
-// patch: 2026-06-25T21:00:00
-
-// patch: 2026-06-28T09:00:00
-
-// patch: 2026-06-29T15:00:00
-
-// patch: 2026-07-02T03:00:00

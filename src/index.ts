@@ -25,15 +25,3 @@ buildServer()
     console.error(err);
     process.exit(1);
   });
-
-// patch: 2026-06-12T18:00:00
-
-// patch: 2026-06-14T00:00:00
-
-// patch: 2026-06-15T06:00:00
-
-// patch: 2026-06-24T00:00:00
-
-// patch: 2026-07-02T18:00:00
-
-// patch: 2026-07-04T00:00:00
