@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsc && node --test $(find dist -name \"*.test.js\")"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
