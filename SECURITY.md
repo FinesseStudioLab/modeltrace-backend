@@ -1,62 +1,80 @@
 # Security Policy
 
-ModelTrace handles attestation, metering, and settlement of AI inference. A
-vulnerability here can mean forged audit evidence or misdirected funds, so we
-treat reports seriously and will credit reporters who follow this process.
+## Supported Versions
 
-## Reporting a vulnerability
+| Version | Supported |
+| ------- | --------- |
+| `main`  | ✅ Yes     |
 
-**Do not open a public issue for an undisclosed vulnerability.**
+Only the current `main` branch receives security fixes. No LTS or versioned releases are supported at this stage.
 
-Use GitHub's private reporting: **Security → Advisories → Report a vulnerability**
-on this repository. If that is unavailable, contact the maintainers listed on the
-[FinesseStudioLab](https://github.com/FinesseStudioLab) organization profile.
+---
 
-Please include:
+## Reporting a Vulnerability
 
-- Affected component and version or commit SHA
-- Reproduction steps or a proof of concept
-- Impact assessment — what an attacker gains
-- Any suggested remediation
+**Do not open a public GitHub issue for security vulnerabilities.**
 
-## Response targets
+Please report security issues by emailing **devsolex6@gmail.com** with the subject line:
 
-| Stage | Target |
-| --- | --- |
-| Acknowledgement | 48 hours |
-| Initial assessment | 5 business days |
-| Fix or mitigation plan | 30 days for high/critical |
+```
+[SECURITY] modeltrace-backend — <brief description>
+```
+
+Include:
+- A description of the vulnerability and its potential impact.
+- Steps to reproduce or a proof-of-concept (if safe to share).
+- Affected component (e.g., route, dependency, CI pipeline).
+- Your GitHub handle or preferred contact for follow-up.
+
+---
+
+## Response Timeline
+
+| Stage | Target SLA |
+| ----- | ---------- |
+| Acknowledgement | Within **48 hours** of receiving the report |
+| Initial triage (severity classification) | Within **5 business days** |
+| Fix for **Critical** severity | Within **7 days** of confirmed triage |
+| Fix for **High** severity | Within **14 days** of confirmed triage |
+| Fix for **Medium / Low** severity | Next regular release cycle (≤ 30 days) |
+| Public disclosure | After patch is merged and released; coordinated with the reporter |
+
+If a fix cannot be delivered within the above windows, we will notify the reporter with an updated timeline and interim mitigations.
+
+---
+
+## Dependency Scanning
+
+This project uses:
+
+- **Dependabot** — weekly PRs for npm and GitHub Actions updates (minor/patch grouped; majors arrive separately).
+- **`npm audit`** — runs in CI on every push and pull request; the build fails on `high` or `critical` advisories.
+- **GitHub Secret Scanning** — push protection is enabled; commits containing detected secrets are blocked.
+
+### Pinned GitHub Actions
+
+All GitHub Actions in `.github/workflows/` are pinned to immutable commit SHAs rather than floating version tags. This prevents supply-chain attacks where a tag is repointed to malicious code. Dependabot keeps the SHA pins up to date automatically.
+
+---
 
 ## Scope
 
-In scope: contract logic, authorization boundaries, arithmetic and rounding in
-metering or settlement, API authentication and authorization, secret handling.
+The following are **in scope** for security reports:
 
-Out of scope: findings that require a compromised maintainer machine, denial of
-service via unbounded self-funded transaction volume on public testnets, and
-issues in third-party dependencies with no exploitable path through this code
-(report those upstream, but tell us so we can pin or patch).
+- Authentication bypass or privilege escalation in API routes.
+- Secrets or signing keys exposed via logs, responses, or environment variables.
+- Injection vulnerabilities (SQL, command, SSRF, etc.) in any route or integration layer.
+- Soroban / Stellar transaction manipulation (incorrect fee, replay, signature bypass).
+- Supply-chain issues in npm or GitHub Actions dependencies.
 
-## Disclosure
+The following are **out of scope**:
 
-We aim to coordinate disclosure once a fix ships. Contracts already deployed to
-mainnet may warrant a longer embargo; we will tell you if so and why.
+- Issues in dependencies that already have a published advisory and an open Dependabot PR.
+- Theoretical vulnerabilities with no practical exploit path.
+- Social engineering or phishing attacks.
 
-## Signing key custody
+---
 
-This service **never signs transactions that move value.** Settlement, refunds,
-and dispute payouts are returned to the caller as unsigned XDR envelopes, so a
-full compromise of `modeltrace-api` cannot move funds.
+## Acknowledgements
 
-The only key that may exist here is a low-privilege attestation key, held in a
-KMS and scoped on-chain to attestation entry points. Compromise costs
-audit-record integrity for the window before revocation — serious and
-recoverable — not funds.
-
-The reasoning, the provider model, the rotation procedure, and the alerting
-signals are in
-[`docs/adr/0001-soroban-signing-key-custody.md`](docs/adr/0001-soroban-signing-key-custody.md).
-
-**If you find key material in source, logs, or an error response, treat it as a
-vulnerability** and report it through the private process above rather than
-opening an issue.
+Security reporters who responsibly disclose confirmed vulnerabilities will be credited in the relevant release notes (unless they prefer to remain anonymous).
