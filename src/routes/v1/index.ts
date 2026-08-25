@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
+import { attestationsRoutes } from "./attestations.js";
+import { usageRoutes } from "./usage.js";
 
 export const v1Routes: FastifyPluginAsync = async (app) => {
   app.get("/meta", async () => ({
@@ -7,5 +9,7 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
     description: "REST facade for Soroban contracts and indexers (scaffold).",
   }));
 
-  // TODO: routes for contract invocation prep, webhook ingestion, admin ops
+  // Register the new API routes
+  app.register(attestationsRoutes, { prefix: "/attestations" });
+  app.register(usageRoutes, { prefix: "/usage" });
 };

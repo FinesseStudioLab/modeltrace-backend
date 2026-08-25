@@ -4,3 +4,10 @@ dist/
 .env.local
 *.log
 .DS_Store
+*.db
+*.db-journal
+
+/src/generated/prisma
+.agents/skills
+.claude/skills
+.windsurf/skills
