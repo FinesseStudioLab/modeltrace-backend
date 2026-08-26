@@ -61,6 +61,8 @@ async function buildServer() {
 
   await app.register(cors, {
     origin: config.corsOrigin,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
   await app.register(healthRoutes);

@@ -19,7 +19,9 @@ const baseEnv = {
 
 Object.assign(process.env, baseEnv);
 
-const { envSchema, parseEnv } = await import("./env.js");
+const { baseEnvSchema, parseEnv, parseCorsOrigins, resolveCorsOrigins } = await import(
+  "./env.js"
+);
 
 function exampleEnvKeys(): string[] {
   return readFileSync(".env.example", "utf8")
@@ -53,8 +55,52 @@ test("contract IDs must be Soroban contract-shaped strkeys", () => {
   );
 });
 
+test("CORS_ORIGIN parses a comma-separated list into multiple origins", () => {
+  assert.deepEqual(parseCorsOrigins("https://a.example, https://b.example"), [
+    "https://a.example",
+    "https://b.example",
+  ]);
+  assert.deepEqual(parseCorsOrigins(undefined), []);
+  assert.deepEqual(parseCorsOrigins(""), []);
+});
+
+test("resolveCorsOrigins falls back to the dev default outside production", () => {
+  assert.deepEqual(resolveCorsOrigins(undefined, "development"), ["http://localhost:3000"]);
+  assert.deepEqual(resolveCorsOrigins("https://a.example", "development"), [
+    "https://a.example",
+  ]);
+});
+
+test("production requires CORS_ORIGIN to be set explicitly", () => {
+  const { CORS_ORIGIN, ...withoutCors } = baseEnv;
+  assert.throws(
+    () => parseEnv({ ...withoutCors, NODE_ENV: "production" }),
+    /CORS_ORIGIN/,
+  );
+});
+
+test('production rejects "*" as a CORS origin', () => {
+  assert.throws(
+    () => parseEnv({ ...baseEnv, NODE_ENV: "production", CORS_ORIGIN: "*" }),
+    /CORS_ORIGIN/,
+  );
+  assert.throws(
+    () => parseEnv({ ...baseEnv, NODE_ENV: "production", CORS_ORIGIN: "https://a.example,*" }),
+    /CORS_ORIGIN/,
+  );
+});
+
+test("production accepts an explicit, non-wildcard CORS_ORIGIN", () => {
+  const parsed = parseEnv({
+    ...baseEnv,
+    NODE_ENV: "production",
+    CORS_ORIGIN: "https://app.example.com",
+  });
+  assert.equal(parsed.CORS_ORIGIN, "https://app.example.com");
+});
+
 test(".env.example carries every required schema key", () => {
-  const schemaKeys = Object.keys(envSchema.shape);
+  const schemaKeys = Object.keys(baseEnvSchema.shape);
   const optionalKeys = new Set(["SIGNING_KMS_KEY_ID", "SIGNING_ENV_SECRET_KEY"]);
   const exampleKeys = new Set(exampleEnvKeys());
 
