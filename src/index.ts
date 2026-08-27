@@ -1,5 +1,6 @@
 import Fastify, { type FastifyError, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import { config } from "./config/env.js";
 import { healthRoutes } from "./routes/health.js";
 import { v1Routes } from "./routes/v1/index.js";
@@ -16,8 +17,14 @@ declare module "fastify" {
   }
 }
 
-async function buildServer() {
+export interface BuildServerOptions {
+  bodyLimitBytes?: number;
+  rateLimit?: { max?: number; windowMs?: number };
+}
+
+export async function buildServer(opts: BuildServerOptions = {}) {
   const app = Fastify({
+    bodyLimit: opts.bodyLimitBytes ?? config.bodyLimitBytes,
     logger: {
       // Redaction runs at the serializer boundary rather than at call sites: a
       // secret reaches the log by being nested in a request body or hanging off
@@ -65,17 +72,28 @@ async function buildServer() {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
+  await app.register(rateLimit, {
+    max: opts.rateLimit?.max ?? config.rateLimit.max,
+    timeWindow: opts.rateLimit?.windowMs ?? config.rateLimit.windowMs,
+    keyGenerator: (req) => req.ip,
+    errorResponseBuilder: () => ({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: "rate limit exceeded",
+    }),
+  });
+
   await app.register(healthRoutes);
   await app.register(v1Routes, { prefix: config.apiPrefix });
 
   return app;
 }
 
-buildServer()
-  .then((app) =>
-    app.listen({ port: config.port, host: "0.0.0.0" }),
-  )
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+if (import.meta.url === new URL(process.argv[1], import.meta.url).href) {
+  buildServer()
+    .then((app) => app.listen({ port: config.port, host: "0.0.0.0" }))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
