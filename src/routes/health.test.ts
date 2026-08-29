@@ -15,6 +15,8 @@ Object.assign(process.env, {
   USAGE_METER_CONTRACT_ID: "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
   PAYMENT_ROUTER_CONTRACT_ID: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
   SIGNING_PROVIDER: "null",
+  JWT_SECRET: "dev-secret-32-characters-long!!!",
+  API_KEY_STORE: "[]",
 });
 
 const { healthRoutes, resetHealthCache, setShuttingDown } = await import(

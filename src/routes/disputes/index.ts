@@ -16,11 +16,9 @@ export interface DisputeRoutesOptions {
 
 /**
  * Everything the dispute lifecycle needs: raise, list (role-scoped),
- * attach evidence, and resolve. Auth is a placeholder — the repo has no
- * session/identity layer yet, so role and user identity are read from
- * headers the same way a real gateway would inject them post-auth. This
- * keeps the role-scoping logic itself (the part the acceptance criteria
- * care about) real and testable without inventing an auth system.
+ * attach evidence, and resolve. Authentication is handled by the global
+ * auth plugin; this module only reads the business role from the `x-role`
+ * header and derives the user identity from the authenticated subject.
  */
 export const disputeRoutes: FastifyPluginAsync<DisputeRoutesOptions> = async (
   app,
@@ -30,18 +28,28 @@ export const disputeRoutes: FastifyPluginAsync<DisputeRoutesOptions> = async (
   const windowMs = opts.windowMs ?? 7 * 24 * 60 * 60 * 1000; // 7 days
 
   function actor(req: FastifyRequest): { role: DisputeRole; userId: string } | null {
+    if (!req.identity) return null;
     const roleHeader = req.headers["x-role"];
-    const userId = req.headers["x-user-id"];
     const parsed = disputeRoleSchema.safeParse(
       Array.isArray(roleHeader) ? roleHeader[0] : roleHeader,
     );
-    if (!parsed.success || typeof userId !== "string" || userId.length === 0) return null;
-    return { role: parsed.data, userId };
+    if (!parsed.success) return null;
+    return { role: parsed.data, userId: req.identity.subject };
+  }
+
+  function requireScope(req: FastifyRequest, reply: import("fastify").FastifyReply, scope: import("../../auth/types.js").AuthScope) {
+    if (!app.auth.verifyScope(req, scope)) {
+      return reply.code(403).send({ error: "insufficient scope" });
+    }
+    return undefined;
   }
 
   app.post("/disputes", async (req, reply) => {
+    const denied = requireScope(req, reply, "dispute:write");
+    if (denied) return denied;
+
     const who = actor(req);
-    if (!who) return reply.code(401).send({ error: "missing or invalid x-role/x-user-id" });
+    if (!who) return reply.code(401).send({ error: "missing or invalid x-role" });
 
     const body = raiseDisputeSchema.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
@@ -55,15 +63,21 @@ export const disputeRoutes: FastifyPluginAsync<DisputeRoutesOptions> = async (
   });
 
   app.get("/disputes", async (req, reply) => {
+    const denied = requireScope(req, reply, "dispute:read");
+    if (denied) return denied;
+
     const who = actor(req);
-    if (!who) return reply.code(401).send({ error: "missing or invalid x-role/x-user-id" });
+    if (!who) return reply.code(401).send({ error: "missing or invalid x-role" });
 
     return reply.send(store.listForRole(who.role, who.userId));
   });
 
   app.post<{ Params: { id: string } }>("/disputes/:id/evidence", async (req, reply) => {
+    const denied = requireScope(req, reply, "dispute:write");
+    if (denied) return denied;
+
     const who = actor(req);
-    if (!who) return reply.code(401).send({ error: "missing or invalid x-role/x-user-id" });
+    if (!who) return reply.code(401).send({ error: "missing or invalid x-role" });
 
     const dispute = store.get(req.params.id);
     if (!dispute) return reply.code(404).send({ error: "dispute not found" });
@@ -82,8 +96,11 @@ export const disputeRoutes: FastifyPluginAsync<DisputeRoutesOptions> = async (
   });
 
   app.post<{ Params: { id: string } }>("/disputes/:id/resolve", async (req, reply) => {
+    const denied = requireScope(req, reply, "admin");
+    if (denied) return denied;
+
     const who = actor(req);
-    if (!who) return reply.code(401).send({ error: "missing or invalid x-role/x-user-id" });
+    if (!who) return reply.code(401).send({ error: "missing or invalid x-role" });
     if (who.role !== "adjudicator") {
       return reply.code(403).send({ error: "only an adjudicator may resolve a dispute" });
     }

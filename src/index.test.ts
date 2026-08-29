@@ -1,34 +1,42 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import Fastify from "fastify";
+import { registerAuthHooks } from "./auth/plugin.js";
+import { generateApiKey, resolveAuthProvider } from "./auth/provider.js";
+import { createTestAuthProvider } from "./auth/testing.js";
+import { buildServer } from "./index.js";
 
 const validContractId = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-function setBaseEnv() {
-  process.env.NODE_ENV = "test";
-  process.env.PORT = "0";
-  process.env.API_PREFIX = "/api/v1";
-  process.env.CORS_ORIGIN = "http://localhost:3000";
-  process.env.STELLAR_NETWORK = "testnet";
-  process.env.SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
-  process.env.AUDIT_REGISTRY_CONTRACT_ID = validContractId;
-  process.env.USAGE_METER_CONTRACT_ID = "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
-  process.env.PAYMENT_ROUTER_CONTRACT_ID = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
-  process.env.SIGNING_PROVIDER = "null";
-}
+process.env.NODE_ENV = "test";
+process.env.PORT = "0";
+process.env.API_PREFIX = "/api/v1";
+process.env.CORS_ORIGIN = "http://localhost:3000";
+process.env.STELLAR_NETWORK = "testnet";
+process.env.SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
+process.env.AUDIT_REGISTRY_CONTRACT_ID = validContractId;
+process.env.USAGE_METER_CONTRACT_ID = "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+process.env.PAYMENT_ROUTER_CONTRACT_ID = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+process.env.SIGNING_PROVIDER = "null";
+process.env.RATE_LIMIT_MAX = "100";
+process.env.RATE_LIMIT_WINDOW_MS = "60000";
+process.env.BODY_LIMIT_BYTES = "1048576";
+process.env.JWT_SECRET = "dev-secret-32-characters-long!!!";
+process.env.API_KEY_STORE = "[]";
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 async function buildApp(opts: { rateLimitMax?: number; bodyLimitBytes?: number } = {}) {
-  setBaseEnv();
-  process.env.RATE_LIMIT_MAX = "100";
-  process.env.RATE_LIMIT_WINDOW_MS = "60000";
-  process.env.BODY_LIMIT_BYTES = "1048576";
-
-  const { buildServer } = await import("./index.js");
   const app = await buildServer({
     rateLimit: opts.rateLimitMax !== undefined ? { max: opts.rateLimitMax } : undefined,
     bodyLimitBytes: opts.bodyLimitBytes,
   });
   await app.ready();
   return app;
+}
+
+function gatewayAuth(entry: ReturnType<typeof generateApiKey>["entry"]) {
+  return resolveAuthProvider({ jwtSecret: JWT_SECRET, apiKeyStore: [entry] });
 }
 
 test("rate limit rejects requests above the configured threshold", async () => {
@@ -89,6 +97,118 @@ test("small payloads within the body limit are accepted", async () => {
   });
 
   assert.equal(res.statusCode, 201);
+
+  await app.close();
+});
+
+test("health endpoints are public and do not require credentials", async () => {
+  const app = await buildApp();
+
+  const live = await app.inject({ method: "GET", url: "/health/live" });
+  assert.equal(live.statusCode, 200);
+
+  const health = await app.inject({ method: "GET", url: "/health" });
+  assert.equal(health.statusCode, 200);
+
+  await app.close();
+});
+
+test("/api/v1/meta is public", async () => {
+  const app = await buildApp();
+
+  const res = await app.inject({ method: "GET", url: "/api/v1/meta" });
+  assert.equal(res.statusCode, 200);
+
+  await app.close();
+});
+
+test("protected routes reject unauthenticated requests", async () => {
+  const app = await buildApp();
+
+  const res = await app.inject({ method: "GET", url: "/api/v1/disputes" });
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.json().error, "unauthorized");
+
+  await app.close();
+});
+
+test("protected routes accept a valid gateway API key", async () => {
+  const { key, entry } = generateApiKey("gateway-prod", ["dispute:read"]);
+  const auth = gatewayAuth(entry);
+  const app = await buildServer({ auth });
+  await app.ready();
+
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/disputes",
+    headers: {
+      authorization: `ApiKey ${key}`,
+      "x-role": "adjudicator",
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+
+  await app.close();
+});
+
+test("protected routes accept a valid operator bearer token", async () => {
+  const app = await buildServer();
+  await app.ready();
+
+  const token = await app.auth.issueOperatorToken("operator-1", ["dispute:read"]);
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/disputes",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "x-role": "adjudicator",
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+
+  await app.close();
+});
+
+test("protected routes enforce scopes", async () => {
+  const { key, entry } = generateApiKey("gateway-prod", ["meta:read"]);
+  const auth = gatewayAuth(entry);
+  const app = await buildServer({ auth });
+  await app.ready();
+
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/v1/disputes",
+    headers: {
+      authorization: `ApiKey ${key}`,
+      "x-role": "adjudicator",
+    },
+  });
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json().error, "insufficient scope");
+
+  await app.close();
+});
+
+test("routes without explicit public opt-in are denied by default", async () => {
+  const auth = createTestAuthProvider();
+  const app = Fastify();
+  app.decorate("auth", auth);
+  registerAuthHooks(app, auth);
+  app.get("/hidden", async () => "ok");
+  await app.ready();
+
+  const denied = await app.inject({ method: "GET", url: "/hidden" });
+  assert.equal(denied.statusCode, 401);
+
+  const allowed = await app.inject({
+    method: "GET",
+    url: "/hidden",
+    headers: { "x-test-auth": "user,meta:read" },
+  });
+  assert.equal(allowed.statusCode, 200);
 
   await app.close();
 });

@@ -2,6 +2,9 @@ import Fastify, { type FastifyError, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { config } from "./config/env.js";
+import { registerAuthHooks } from "./auth/plugin.js";
+import { parseApiKeyStore, resolveAuthProvider } from "./auth/provider.js";
+import type { AuthProvider } from "./auth/types.js";
 import { healthRoutes } from "./routes/health.js";
 import { v1Routes } from "./routes/v1/index.js";
 import {
@@ -14,12 +17,15 @@ declare module "fastify" {
   interface FastifyInstance {
     /** Custody-aware signer. Exposes signatures, never key material. */
     signing: SigningKeyProvider;
+    /** Authentication provider for gateway keys and operator sessions. */
+    auth: AuthProvider;
   }
 }
 
 export interface BuildServerOptions {
   bodyLimitBytes?: number;
   rateLimit?: { max?: number; windowMs?: number };
+  auth?: AuthProvider;
 }
 
 export async function buildServer(opts: BuildServerOptions = {}) {
@@ -82,6 +88,15 @@ export async function buildServer(opts: BuildServerOptions = {}) {
       message: "rate limit exceeded",
     }),
   });
+
+  const auth =
+    opts.auth ??
+    resolveAuthProvider({
+      jwtSecret: config.auth.jwtSecret,
+      apiKeyStore: parseApiKeyStore(config.auth.apiKeyStore),
+    });
+  app.decorate("auth", auth);
+  registerAuthHooks(app, auth);
 
   await app.register(healthRoutes);
   await app.register(v1Routes, { prefix: config.apiPrefix });

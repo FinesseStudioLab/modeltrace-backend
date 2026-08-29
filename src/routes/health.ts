@@ -101,14 +101,14 @@ export const healthRoutes: FastifyPluginAsync<HealthRoutesOptions> = async (
   const cacheTtlMs = opts.cacheTtlMs ?? 5000;
 
   // Liveness check: process is running. Cheap, no dependencies.
-  app.get("/health/live", async () => ({
+  app.get("/health/live", { config: { public: true } }, async () => ({
     status: "ok",
     service: "api",
     timestamp: new Date().toISOString(),
   }));
 
   // Backwards-compatible /health endpoint
-  app.get("/health", async () => ({
+  app.get("/health", { config: { public: true } }, async () => ({
     status: "ok",
     service: "api",
     timestamp: new Date().toISOString(),
@@ -117,6 +117,7 @@ export const healthRoutes: FastifyPluginAsync<HealthRoutesOptions> = async (
   // Readiness check: dependencies reachability & shutdown state
   app.get(
     "/health/ready",
+    { config: { public: true } },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const timestamp = new Date().toISOString();
 

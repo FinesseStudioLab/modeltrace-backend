@@ -4,7 +4,8 @@ import { getMetaInfo } from "../../meta/version.js";
 import { disputeRoutes } from "../disputes/index.js";
 
 export const v1Routes: FastifyPluginAsync = async (app) => {
-  app.get("/meta", async () => getMetaInfo(config));
+  // Public service metadata — safe to expose without credentials.
+  app.get("/meta", { config: { public: true } }, async () => getMetaInfo(config));
 
   await app.register(disputeRoutes);
 
