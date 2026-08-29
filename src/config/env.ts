@@ -83,8 +83,59 @@ export function resolveCorsOrigins(raw: string | undefined, nodeEnv: string): st
   return parsed.length > 0 ? parsed : [DEV_DEFAULT_ORIGIN];
 }
 
+/**
+ * Describes a single validation issue without ever echoing the value that
+ * was provided — environment variables routinely hold secrets, and even a
+ * "non-secret" one (a URL with embedded credentials, say) isn't something
+ * to gamble on. `invalid_enum_value` is the one Zod issue code whose
+ * default `.message` includes the offending value verbatim ("received
+ * 'x'"), so it gets a synthesized message instead; every other code used by
+ * this schema (invalid_type, invalid_string, and our own `custom` issues)
+ * already keeps its default message value-free.
+ */
+function describeIssue(issue: z.ZodIssue): string {
+  if (issue.code === z.ZodIssueCode.invalid_enum_value) {
+    return `must be one of: ${issue.options.join(", ")}`;
+  }
+  return issue.message;
+}
+
+/** Renders a ZodError as a readable, per-variable list — never a raw JSON dump. */
+function formatEnvError(error: z.ZodError): string {
+  const lines = error.issues.map((issue) => {
+    const path = issue.path.join(".") || "(root)";
+    return `  - ${path}: ${describeIssue(issue)}`;
+  });
+  return [
+    "Invalid environment configuration:",
+    ...lines,
+    "",
+    "Fix the variable(s) above and restart. Values are never logged.",
+  ].join("\n");
+}
+
 export function parseEnv(env: NodeJS.ProcessEnv) {
-  return envSchema.parse(env);
+  const result = envSchema.safeParse(env);
+  if (!result.success) {
+    throw new Error(formatEnvError(result.error));
+  }
+  return result.data;
+}
+
+/**
+ * Loads and validates the environment, exiting the process with a readable
+ * message on failure rather than letting a ZodError propagate as an
+ * uncaught exception (a raw stack trace and a wall of JSON, printed before
+ * any logger exists). `process.exit` is typed `never`, so control flow
+ * analysis knows the catch branch never falls through to a missing return.
+ */
+function loadEnv(): z.infer<typeof envSchema> {
+  try {
+    return parseEnv(process.env);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    return process.exit(1);
+  }
 }
 
 let _config: ReturnType<typeof parseEnv> | null = null;
@@ -95,6 +146,7 @@ export function getConfig(): ReturnType<typeof parseEnv> {
   }
   return _config;
 }
+const raw = loadEnv();
 
 export const config = {
   get nodeEnv() { return getConfig().NODE_ENV; },
@@ -134,3 +186,26 @@ export const config = {
     };
   },
 };
+
+/**
+ * The resolved *effective* configuration, with the one field that is
+ * genuinely secret material (the interim env-var signing key, never the
+ * KMS key id — that's a reference, not the key itself) redacted. Logged at
+ * boot so an operator can confirm what the process actually loaded, rather
+ * than reconstructing it from a dozen environment variables by hand.
+ */
+export function redactedConfig(): Record<string, unknown> {
+  return {
+    ...config,
+    signing: {
+      ...config.signing,
+      envSecret: config.signing.envSecret ? "[redacted]" : undefined,
+    },
+  };
+}
+
+// Skipped under NODE_ENV=test so importing this module in a test file — every
+// test in this repo does — doesn't spam the console on every run.
+if (config.nodeEnv !== "test") {
+  console.log("Resolved configuration:", JSON.stringify(redactedConfig(), null, 2));
+}
