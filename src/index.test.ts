@@ -58,15 +58,18 @@ test("rate limit rejects requests above the configured threshold", async () => {
 });
 
 test("body limit rejects payloads larger than the configured size", async () => {
-  const app = await buildApp({ bodyLimitBytes: 64 });
+  const { key, entry } = generateApiKey("gateway-prod", ["dispute:write"]);
+  const auth = gatewayAuth(entry);
+  const app = await buildServer({ bodyLimitBytes: 64, auth });
+  await app.ready();
 
   const bigPayload = "x".repeat(128);
   const res = await app.inject({
     method: "POST",
     url: "/api/v1/disputes",
     headers: {
+      authorization: `ApiKey ${key}`,
       "x-role": "buyer",
-      "x-user-id": "buyer-1",
       "content-type": "application/json",
     },
     payload: JSON.stringify({ content: bigPayload }),
@@ -78,14 +81,17 @@ test("body limit rejects payloads larger than the configured size", async () => 
 });
 
 test("small payloads within the body limit are accepted", async () => {
-  const app = await buildApp({ bodyLimitBytes: 4096 });
+  const { key, entry } = generateApiKey("gateway-prod", ["dispute:write"]);
+  const auth = gatewayAuth(entry);
+  const app = await buildServer({ bodyLimitBytes: 4096, auth });
+  await app.ready();
 
   const res = await app.inject({
     method: "POST",
     url: "/api/v1/disputes",
     headers: {
+      authorization: `ApiKey ${key}`,
       "x-role": "buyer",
-      "x-user-id": "buyer-1",
       "content-type": "application/json",
     },
     payload: JSON.stringify({

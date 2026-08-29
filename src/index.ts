@@ -20,6 +20,11 @@ declare module "fastify" {
     /** Authentication provider for gateway keys and operator sessions. */
     auth: AuthProvider;
   }
+
+  interface FastifyContextConfig {
+    /** Routes with `public: true` skip the global auth hook. */
+    public?: boolean;
+  }
 }
 
 export interface BuildServerOptions {
