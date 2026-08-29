@@ -30,6 +30,11 @@ const baseEnvSchema = z.object({
   SIGNING_PROVIDER: z.enum(["null", "kms", "env"]).default("null"),
   SIGNING_KMS_KEY_ID: z.string().optional(),
   SIGNING_ENV_SECRET_KEY: z.string().optional(),
+
+  // Operational guardrails — issue #43.
+  RATE_LIMIT_MAX: z.coerce.number().default(100),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
+  BODY_LIMIT_BYTES: z.coerce.number().default(1048576),
 });
 
 /** Exposed separately so callers that need `.shape` (e.g. tests) can get at
@@ -100,4 +105,9 @@ export const config = {
     envSecret: raw.SIGNING_ENV_SECRET_KEY,
     nodeEnv: raw.NODE_ENV,
   },
+  rateLimit: {
+    max: raw.RATE_LIMIT_MAX,
+    windowMs: raw.RATE_LIMIT_WINDOW_MS,
+  },
+  bodyLimitBytes: raw.BODY_LIMIT_BYTES,
 };
