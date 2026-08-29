@@ -1,18 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import Fastify from "fastify";
+import { registerAuthHooks } from "../../auth/plugin.js";
+import { createTestAuthProvider } from "../../auth/testing.js";
 import { disputeRoutes } from "./index.js";
 import { DisputeStore } from "./store.js";
 
 async function buildApp(opts: { windowMs?: number; store?: DisputeStore } = {}) {
   const app = Fastify();
+  const auth = createTestAuthProvider();
+  app.decorate("auth", auth);
+  registerAuthHooks(app, auth);
   await app.register(disputeRoutes, opts);
   await app.ready();
   return app;
 }
 
-function headers(role: string, userId: string) {
-  return { "x-role": role, "x-user-id": userId, "content-type": "application/json" };
+function headers(role: string, userId: string, scopes: string[] = ["dispute:read", "dispute:write", "admin"]) {
+  return {
+    "x-role": role,
+    "x-test-auth": `${userId},${scopes.join(",")}`,
+    "content-type": "application/json",
+  };
 }
 
 test("a buyer can raise a dispute with evidence, hash-committed", async () => {
@@ -146,8 +155,18 @@ test("evidence is rejected once the window has closed", async () => {
   assert.equal(res.statusCode, 409);
 });
 
-test("requests without a recognized role/user are rejected", async () => {
+test("requests without credentials are rejected", async () => {
   const app = await buildApp();
   const res = await app.inject({ method: "GET", url: "/disputes" });
   assert.equal(res.statusCode, 401);
+});
+
+test("requests with the wrong scope are rejected", async () => {
+  const app = await buildApp();
+  const res = await app.inject({
+    method: "GET",
+    url: "/disputes",
+    headers: headers("buyer", "buyer-1", ["meta:read"]),
+  });
+  assert.equal(res.statusCode, 403);
 });

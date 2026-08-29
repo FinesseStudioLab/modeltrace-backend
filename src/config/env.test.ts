@@ -18,6 +18,8 @@ const baseEnv = {
   RATE_LIMIT_MAX: "100",
   RATE_LIMIT_WINDOW_MS: "60000",
   BODY_LIMIT_BYTES: "1048576",
+  JWT_SECRET: "dev-secret-32-characters-long!!!",
+  API_KEY_STORE: "[]",
 };
 
 Object.assign(process.env, baseEnv);
@@ -104,7 +106,7 @@ test("production accepts an explicit, non-wildcard CORS_ORIGIN", () => {
 
 test(".env.example carries every required schema key", () => {
   const schemaKeys = Object.keys(baseEnvSchema.shape);
-  const optionalKeys = new Set(["SIGNING_KMS_KEY_ID", "SIGNING_ENV_SECRET_KEY"]);
+  const optionalKeys = new Set(["SIGNING_KMS_KEY_ID", "SIGNING_ENV_SECRET_KEY", "API_KEY_STORE"]);
   const exampleKeys = new Set(exampleEnvKeys());
 
   for (const key of schemaKeys) {

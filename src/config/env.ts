@@ -35,6 +35,10 @@ const baseEnvSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   BODY_LIMIT_BYTES: z.coerce.number().default(1048576),
+
+  // Authentication — issue #42.
+  JWT_SECRET: z.string().min(32),
+  API_KEY_STORE: z.string().default("[]"),
 });
 
 /** Exposed separately so callers that need `.shape` (e.g. tests) can get at
@@ -134,33 +138,53 @@ function loadEnv(): z.infer<typeof envSchema> {
   }
 }
 
+let _config: ReturnType<typeof parseEnv> | null = null;
+
+export function getConfig(): ReturnType<typeof parseEnv> {
+  if (!_config) {
+    _config = parseEnv(process.env);
+  }
+  return _config;
+}
 const raw = loadEnv();
 
 export const config = {
-  nodeEnv: raw.NODE_ENV,
-  port: raw.PORT,
-  apiPrefix: raw.API_PREFIX,
-  corsOrigin: resolveCorsOrigins(raw.CORS_ORIGIN, raw.NODE_ENV),
-  stellar: {
-    network: raw.STELLAR_NETWORK,
-    sorobanRpcUrl: raw.SOROBAN_RPC_URL,
-    contracts: {
-      auditRegistry: raw.AUDIT_REGISTRY_CONTRACT_ID,
-      usageMeter: raw.USAGE_METER_CONTRACT_ID,
-      paymentRouter: raw.PAYMENT_ROUTER_CONTRACT_ID,
-    },
+  get nodeEnv() { return getConfig().NODE_ENV; },
+  get port() { return getConfig().PORT; },
+  get apiPrefix() { return getConfig().API_PREFIX; },
+  get corsOrigin() { return resolveCorsOrigins(getConfig().CORS_ORIGIN, getConfig().NODE_ENV); },
+  get stellar() {
+    return {
+      network: getConfig().STELLAR_NETWORK,
+      sorobanRpcUrl: getConfig().SOROBAN_RPC_URL,
+      contracts: {
+        auditRegistry: getConfig().AUDIT_REGISTRY_CONTRACT_ID,
+        usageMeter: getConfig().USAGE_METER_CONTRACT_ID,
+        paymentRouter: getConfig().PAYMENT_ROUTER_CONTRACT_ID,
+      },
+    };
   },
-  signing: {
-    provider: raw.SIGNING_PROVIDER,
-    kmsKeyId: raw.SIGNING_KMS_KEY_ID,
-    envSecret: raw.SIGNING_ENV_SECRET_KEY,
-    nodeEnv: raw.NODE_ENV,
+  get signing() {
+    return {
+      provider: getConfig().SIGNING_PROVIDER,
+      kmsKeyId: getConfig().SIGNING_KMS_KEY_ID,
+      envSecret: getConfig().SIGNING_ENV_SECRET_KEY,
+      nodeEnv: getConfig().NODE_ENV,
+    };
   },
-  rateLimit: {
-    max: raw.RATE_LIMIT_MAX,
-    windowMs: raw.RATE_LIMIT_WINDOW_MS,
+  get rateLimit() {
+    return {
+      max: getConfig().RATE_LIMIT_MAX,
+      windowMs: getConfig().RATE_LIMIT_WINDOW_MS,
+    };
   },
-  bodyLimitBytes: raw.BODY_LIMIT_BYTES,
+  get bodyLimitBytes() { return getConfig().BODY_LIMIT_BYTES; },
+  get auth() {
+    return {
+      jwtSecret: getConfig().JWT_SECRET,
+      apiKeyStore: getConfig().API_KEY_STORE,
+    };
+  },
 };
 
 /**
