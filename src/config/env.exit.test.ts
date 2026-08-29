@@ -25,6 +25,7 @@ const validEnv = {
   PAYMENT_ROUTER_CONTRACT_ID: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
   CORS_ORIGIN: "https://app.example.com",
   SIGNING_ENV_SECRET_KEY: "S-THIS-IS-THE-SECRET-VALUE",
+  JWT_SECRET: "super-secret-key-at-least-32-chars!!",
 };
 
 // A cwd with no .env file, so `dotenv/config` (imported at the top of
