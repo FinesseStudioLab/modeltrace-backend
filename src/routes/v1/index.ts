@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
+import { attestationsRoutes } from "./attestations.js";
+import { usageRoutes } from "./usage.js";
 import { config } from "../../config/env.js";
 import { getMetaInfo } from "../../meta/version.js";
 import { disputeRoutes } from "../disputes/index.js";
@@ -8,5 +10,7 @@ export const v1Routes: FastifyPluginAsync = async (app) => {
 
   await app.register(disputeRoutes);
 
-  // TODO: routes for contract invocation prep, webhook ingestion, admin ops
+  // Register the new API routes
+  app.register(attestationsRoutes, { prefix: "/attestations" });
+  app.register(usageRoutes, { prefix: "/usage" });
 };
